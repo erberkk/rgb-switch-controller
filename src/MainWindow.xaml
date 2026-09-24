@@ -1,0 +1,172 @@
+<Window x:Class="RgbSwitch.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="RGB Switch" Width="400" Height="640"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI Variable Text, Segoe UI" UseLayoutRounding="True">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="Surface" Color="#0E1014"/>
+        <SolidColorBrush x:Key="Card" Color="#161920"/>
+        <SolidColorBrush x:Key="Stroke" Color="#232733"/>
+        <SolidColorBrush x:Key="TextMain" Color="#F2F4F8"/>
+        <SolidColorBrush x:Key="TextDim" Color="#8A91A0"/>
+        <FontFamily x:Key="Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+        <Style x:Key="ChromeButton" TargetType="Button">
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDim}"/>
+            <Setter Property="FontFamily" Value="{StaticResource Icons}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" Background="Transparent" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#1F232C"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PowerButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="root" RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <ScaleTransform x:Name="scale" ScaleX="1" ScaleY="1"/>
+                            </Grid.RenderTransform>
+                            <ContentPresenter/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="root" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.96" ScaleY="0.96"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Stroke}" BorderThickness="1" CornerRadius="20" Margin="10">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.55" Color="Black"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Title bar -->
+            <Grid Grid.Row="0" Height="46" Background="Transparent" MouseLeftButtonDown="OnDragWindow">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
+                    <Ellipse Width="8" Height="8" Margin="0,0,10,0">
+                        <Ellipse.Fill>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#8B5CF6" Offset="0"/>
+                                <GradientStop Color="#22D3EE" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                    <TextBlock Text="RGB Switch" Foreground="{StaticResource TextMain}" FontSize="13" FontWeight="SemiBold"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,8,0">
+                    <Button Style="{StaticResource ChromeButton}" Content="&#xE921;" Click="OnMinimize" ToolTip="Küçült"/>
+                    <Button Style="{StaticResource ChromeButton}" Content="&#xE8BB;" Click="OnClose" ToolTip="Tepsiye gizle"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Power -->
+            <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,18,0,8">
+                <Button x:Name="PowerButton" Style="{StaticResource PowerButton}" Click="OnPowerClick" Width="190" Height="190">
+                    <Grid>
+                        <Ellipse x:Name="Halo" Width="190" Height="190" Opacity="0.9">
+                            <Ellipse.Fill>
+                                <RadialGradientBrush>
+                                    <GradientStop x:Name="HaloInner" Color="#558B5CF6" Offset="0.55"/>
+                                    <GradientStop Color="#008B5CF6" Offset="1"/>
+                                </RadialGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <Ellipse x:Name="Disc" Width="148" Height="148" StrokeThickness="2">
+                            <Ellipse.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop x:Name="DiscA" Color="#8B5CF6" Offset="0"/>
+                                    <GradientStop x:Name="DiscB" Color="#22D3EE" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Ellipse.Fill>
+                            <Ellipse.Stroke>
+                                <SolidColorBrush x:Name="DiscStroke" Color="#40FFFFFF"/>
+                            </Ellipse.Stroke>
+                        </Ellipse>
+                        <TextBlock x:Name="PowerGlyph" Text="&#xE7E8;" FontFamily="{StaticResource Icons}" FontSize="52"
+                                   Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Ellipse x:Name="Spinner" Width="160" Height="160" StrokeThickness="3" Visibility="Collapsed"
+                                 StrokeDashArray="18 60" StrokeDashCap="Round" RenderTransformOrigin="0.5,0.5" Stroke="#CCFFFFFF">
+                            <Ellipse.RenderTransform>
+                                <RotateTransform x:Name="SpinnerRotate" Angle="0"/>
+                            </Ellipse.RenderTransform>
+                        </Ellipse>
+                    </Grid>
+                </Button>
+                <TextBlock x:Name="StateTitle" Text="Işıklar açık" Foreground="{StaticResource TextMain}" FontSize="22"
+                           FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,14,0,2"/>
+                <TextBlock x:Name="StateHint" Text="Kapatmak için dokun" Foreground="{StaticResource TextDim}" FontSize="12.5"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Devices -->
+            <ItemsControl Grid.Row="2" x:Name="DeviceList" Margin="16,16,16,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{StaticResource Card}" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
+                                CornerRadius="14" Padding="14,11" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Width="36" Height="36" CornerRadius="10" Background="#1E222B">
+                                    <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Icons}" FontSize="16"
+                                               Foreground="#C9CEDA" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextMain}" FontSize="13.5" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding Subtitle}" Foreground="{StaticResource TextDim}" FontSize="11.5"
+                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding Subtitle}"/>
+                                </StackPanel>
+                                <Ellipse Grid.Column="2" Width="9" Height="9" Fill="{Binding StatusBrush}" VerticalAlignment="Center"
+                                         ToolTip="{Binding StatusText}"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Footer -->
+            <TextBlock Grid.Row="3" x:Name="Footer" Foreground="#5E6573" FontSize="11" Margin="0,4,0,14"
+                       HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="330"/>
+        </Grid>
+    </Border>
+</Window>
