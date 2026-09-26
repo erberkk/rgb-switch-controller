@@ -6,14 +6,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Automation;
-using PcControl.Core;
+using RgbSwitch.Core;
 
-namespace PcControl.Controllers
+namespace RgbSwitch.Controllers
 {
     // Sapphire TRIXX exposes its tabs to UI Automation but not the Glow page content, so the
     // "RGB EFFECT STYLE" rows are clicked by position (relative to the fixed-size window) and
     // the selected row is read back from its highlight colour before and after every click.
-    public sealed class TrixxController : IDeviceController
+    public sealed class TrixxController : IDeviceController, IColorTarget
     {
         const string ExePath = @"C:\Program Files (x86)\Sapphire TRIXX\TRIXX.exe";
         const string WindowTitle = "Sapphire TriXX";
@@ -56,6 +56,26 @@ namespace PcControl.Controllers
                 if (ReadSelected(window) != TurnOff) return null;
                 var target = Array.IndexOf(Styles, snapshot?.Str("style"));
                 Select(window, target < 0 || target == TurnOff ? DefaultStyle : target, ct);
+                return null;
+            }), ct);
+
+        // "#" box of the Custom Color panel, same reference window.
+        const double HexBoxX = 1055, HexBoxY = 775;
+
+        public Task ApplyColorAsync(Rgb color, CancellationToken ct) => Task.Run(() =>
+            WithGlowPage<object>(ct, window =>
+            {
+                if (ReadSelected(window) == TurnOff) throw new InvalidOperationException("ışıklar kapalıyken renk verilemez");
+                if (ReadSelected(window) != DefaultStyle) Select(window, DefaultStyle, ct);
+                Thread.Sleep(300);
+                Desktop.BringToFront(new IntPtr(window.Current.NativeWindowHandle));
+                var (x, y) = ToScreen(window, HexBoxX, HexBoxY);
+                Desktop.ClickAt(x, y);
+                Desktop.SelectAll();
+                Desktop.Type(color.Hex);
+                Desktop.PressKey(Desktop.VkReturn);
+                Thread.Sleep(300);
+                if (ReadSelected(window) != DefaultStyle) throw new InvalidOperationException("TRIXX Custom Color seçimi kayboldu");
                 return null;
             }), ct);
 

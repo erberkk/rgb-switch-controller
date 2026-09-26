@@ -2,34 +2,30 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace PcControl.Core
+namespace RgbSwitch.Core
 {
     public sealed class SavedState
     {
         public bool LightsOff;
         public DateTime? ChangedAt;
+        public string Color;
         public Dictionary<string, Dictionary<string, object>> Snapshots = new Dictionary<string, Dictionary<string, object>>();
     }
 
     public static class StateStore
     {
         public static readonly string Folder =
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PcControl");
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RgbSwitch");
 
         static readonly string FilePath = Path.Combine(Folder, "state.json");
 
         public static SavedState Load()
         {
             var state = new SavedState();
-            var legacy = Path.Combine(Path.GetDirectoryName(Folder), "RgbSwitch", "state.json");
-            if (!File.Exists(FilePath) && File.Exists(legacy))
-            {
-                Directory.CreateDirectory(Folder);
-                File.Copy(legacy, FilePath);
-            }
             if (!File.Exists(FilePath)) return state;
             var root = Json.ReadObject(File.ReadAllText(FilePath));
             state.LightsOff = root.Bool("lightsOff") ?? false;
+            state.Color = root.Str("color");
             if (DateTime.TryParse(root.Str("changedAt"), null, System.Globalization.DateTimeStyles.RoundtripKind, out var at))
                 state.ChangedAt = at;
             if (Json.Obj(root.Get("snapshots")) is Dictionary<string, object> snaps)
@@ -46,6 +42,7 @@ namespace PcControl.Core
             {
                 ["lightsOff"] = state.LightsOff,
                 ["changedAt"] = state.ChangedAt?.ToString("o"),
+                ["color"] = state.Color,
                 ["snapshots"] = state.Snapshots,
             };
             var tmp = FilePath + ".tmp";

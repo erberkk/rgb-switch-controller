@@ -7,7 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Windows.Automation;
 
-namespace PcControl.Core
+namespace RgbSwitch.Core
 {
     // Window lookup, UI Automation search and real mouse clicks, for vendor apps whose
     // buttons only react to physical input.
@@ -103,7 +103,36 @@ namespace PcControl.Core
             }
         }
 
+        public static void PressKey(ushort virtualKey)
+        {
+            var inputs = new[] { KeyInput(virtualKey, 0, 0), KeyInput(virtualKey, 0, 0x0002) };
+            SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
+            Thread.Sleep(40);
+        }
+
+        public static void SelectAll()
+        {
+            var inputs = new[] { KeyInput(0x11, 0, 0), KeyInput(0x41, 0, 0), KeyInput(0x41, 0, 0x0002), KeyInput(0x11, 0, 0x0002) };
+            SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
+            Thread.Sleep(40);
+        }
+
+        public static void Type(string text)
+        {
+            foreach (var ch in text)
+            {
+                var inputs = new[] { KeyInput(0, ch, 0x0004), KeyInput(0, ch, 0x0004 | 0x0002) };
+                SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
+                Thread.Sleep(15);
+            }
+        }
+
+        public const ushort VkReturn = 0x0D;
+
         static INPUT MouseInput(uint flags) => new INPUT { type = 0, mi = new MOUSEINPUT { dwFlags = flags } };
+
+        static INPUT KeyInput(ushort vk, ushort scan, uint flags) =>
+            new INPUT { type = 1, ki = new KEYBDINPUT { wVk = vk, wScan = scan, dwFlags = flags } };
 
         delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
 
@@ -118,7 +147,16 @@ namespace PcControl.Core
         struct MOUSEINPUT { public int dx, dy; public uint mouseData, dwFlags, time; public IntPtr dwExtraInfo; }
 
         [StructLayout(LayoutKind.Sequential)]
-        struct INPUT { public uint type; public MOUSEINPUT mi; }
+        struct KEYBDINPUT { public ushort wVk, wScan; public uint dwFlags, time; public IntPtr dwExtraInfo; }
+
+        // x64 layout (the project targets x64): the union starts at offset 8.
+        [StructLayout(LayoutKind.Explicit)]
+        struct INPUT
+        {
+            [FieldOffset(0)] public uint type;
+            [FieldOffset(8)] public MOUSEINPUT mi;
+            [FieldOffset(8)] public KEYBDINPUT ki;
+        }
 
         [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);

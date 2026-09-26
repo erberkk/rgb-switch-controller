@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using PcControl.Core;
+using RgbSwitch.Core;
 
-namespace PcControl.Controllers
+namespace RgbSwitch.Controllers
 {
     // TRYX KANALI (Panorama SE cooler screen). Its Chromium UI exposes nothing to UI Automation,
     // so the "Screen" switch in the Panorama SE page header is clicked by position and the result

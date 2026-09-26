@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
-using PcControl.Core;
+using RgbSwitch.Core;
 
-namespace PcControl.Controllers
+namespace RgbSwitch.Controllers
 {
     public static class DeviceRegistry
     {

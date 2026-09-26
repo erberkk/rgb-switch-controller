@@ -5,16 +5,16 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using PcControl.Controllers;
-using PcControl.Core;
+using RgbSwitch.Controllers;
+using RgbSwitch.Core;
 using Forms = System.Windows.Forms;
 
-namespace PcControl
+namespace RgbSwitch
 {
     public partial class App : Application
     {
-        const string InstanceName = @"Local\PcControl.Instance";
-        const string ShowEventName = @"Local\PcControl.Show";
+        const string InstanceName = @"Local\RgbSwitch.Instance";
+        const string ShowEventName = @"Local\RgbSwitch.Show";
 
         Mutex instance;
         EventWaitHandle showSignal;
@@ -31,7 +31,7 @@ namespace PcControl
             if (command == "install")
             {
                 try { Installer.Install(); }
-                catch (Exception ex) { MessageBox.Show("Kurulum başarısız: " + ex.Message, "PC Control"); }
+                catch (Exception ex) { MessageBox.Show("Kurulum başarısız: " + ex.Message, "RGB Switch"); }
                 Shutdown();
                 return;
             }
@@ -109,7 +109,7 @@ namespace PcControl
             if (tray == null) return;
             var off = service.LightsOff;
             toggleItem.Text = off ? "Işıkları aç" : "Işıkları kapat";
-            tray.Text = off ? "PC Control · ışıklar kapalı" : "PC Control · ışıklar açık";
+            tray.Text = off ? "RGB Switch · ışıklar kapalı" : "RGB Switch · ışıklar açık";
             var old = tray.Icon;
             tray.Icon = TrayIcon.Create(lit: !off);
             old?.Dispose();
@@ -139,9 +139,11 @@ namespace PcControl
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 var rect = new Rectangle(1, 1, 30, 30);
-                using (var fill = new SolidBrush(lit ? Color.White : Color.FromArgb(0x1A, 0x1A, 0x1A)))
+                using (var fill = lit
+                    ? (Brush)new LinearGradientBrush(rect, Color.FromArgb(0x8B, 0x5C, 0xF6), Color.FromArgb(0x22, 0xD3, 0xEE), 45f)
+                    : new SolidBrush(Color.FromArgb(0x2A, 0x2F, 0x3A)))
                     g.FillEllipse(fill, rect);
-                using (var pen = new Pen(lit ? Color.Black : Color.FromArgb(0x9A, 0x9A, 0x9A), 3f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                using (var pen = new Pen(lit ? Color.White : Color.FromArgb(0x9C, 0xA3, 0xAF), 3f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                 {
                     g.DrawArc(pen, 9, 9, 14, 14, -60, 300);
                     g.DrawLine(pen, 16, 7, 16, 15);

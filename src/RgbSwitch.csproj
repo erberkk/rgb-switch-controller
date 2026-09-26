@@ -1,11 +1,11 @@
-﻿<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <RootNamespace>PcControl</RootNamespace>
-    <AssemblyName>PcControl</AssemblyName>
+    <RootNamespace>RgbSwitch</RootNamespace>
+    <AssemblyName>RgbSwitch</AssemblyName>
     <LangVersion>latest</LangVersion>
-    <PlatformTarget>AnyCPU</PlatformTarget>
+    <PlatformTarget>x64</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
     <Optimize>true</Optimize>
     <DebugType>none</DebugType>

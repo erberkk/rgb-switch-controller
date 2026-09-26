@@ -8,14 +8,14 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using PcControl.Core;
+using RgbSwitch.Core;
 
-namespace PcControl.Controllers
+namespace RgbSwitch.Controllers
 {
     // Drives Lian Li L-Connect 3 through the same local service calls its own UI makes
     // (POST http://127.0.0.1:11021/?action=Device&type=...). The request bodies are the
     // ones the UI last sent, which L-Connect keeps in its "LWireless-UnBindDevice-Setting" file.
-    public sealed class LConnectController : IDeviceController
+    public sealed class LConnectController : IDeviceController, IColorTarget
     {
         const string ServiceUrl = "http://127.0.0.1:11021/";
         const int WirelessTxType = 16973824;
@@ -122,6 +122,10 @@ namespace PcControl.Controllers
                     plan.Lighting.Add(("StrLightingSetting", all));
             }
 
+            // A colour applied from RGB Switch stays in effect until the user saves lighting in L-Connect again.
+            if (LoadColorOverride() is (Rgb color, DateTime at) && at > lastUnbindWrite)
+                plan.Lighting = plan.Lighting.Select(l => (l.type, WithColor(l.type, l.body, color))).ToList();
+
             if (plan.LcdPath != null && Json.List(profile.Get("SubProfiles")) is IList subProfiles)
                 foreach (var sub in subProfiles.OfType<Dictionary<string, object>>())
                     if (Json.List(sub.Get("BindLcd"))?.OfType<bool>().Any(b => b) == true && sub.Int("LcdGroup") is int lcd)
@@ -130,16 +134,68 @@ namespace PcControl.Controllers
             return plan;
         }
 
-        static IEnumerable<Dictionary<string, object>> ReadUnbindSettings(string type)
+        IEnumerable<Dictionary<string, object>> ReadUnbindSettings(string type)
         {
             var newest = Directory.EnumerateFiles(Path.Combine(DataDir, "device"), "*.0", SearchOption.AllDirectories)
-                .Select(path => (path, doc: TryReadGzipJson(path)))
+                .Select(path => (path, doc: TryReadGzipJson(path), written: File.GetLastWriteTimeUtc(path)))
                 .Where(f => f.doc?.Str("DeviceID") == "LWireless-UnBindDevice-Setting" && f.doc.Str("Type") == type)
-                .OrderByDescending(f => File.GetLastWriteTimeUtc(f.path))
-                .Select(f => f.doc)
+                .OrderByDescending(f => f.written)
                 .FirstOrDefault();
-            return Json.Obj(newest?.Get("Data"))?.Values.OfType<Dictionary<string, object>>()
+            if (newest.doc == null) return Enumerable.Empty<Dictionary<string, object>>();
+            if (newest.written > lastUnbindWrite) lastUnbindWrite = newest.written;
+            return Json.Obj(newest.doc.Get("Data"))?.Values.OfType<Dictionary<string, object>>()
                 ?? Enumerable.Empty<Dictionary<string, object>>();
+        }
+
+        DateTime lastUnbindWrite;
+
+        public async Task ApplyColorAsync(Rgb color, CancellationToken ct)
+        {
+            var plan = await BuildPlanAsync(ct);
+            await SendLightingAsync(plan.TxPath, plan.Lighting.Select(l => (l.type, WithColor(l.type, l.body, color))).ToList(), ct);
+            Directory.CreateDirectory(StateStore.Folder);
+            File.WriteAllText(ColorOverridePath, Json.Write(new Dictionary<string, object> { ["color"] = color.Hex, ["at"] = DateTime.UtcNow.ToString("o") }));
+        }
+
+        static readonly string ColorOverridePath = Path.Combine(StateStore.Folder, "lconnect-color.json");
+
+        static (Rgb, DateTime)? LoadColorOverride()
+        {
+            if (!File.Exists(ColorOverridePath)) return null;
+            var doc = Json.ReadObject(File.ReadAllText(ColorOverridePath));
+            if (!Rgb.TryParse(doc.Str("color"), out var color)) return null;
+            if (!DateTime.TryParse(doc.Str("at"), null, System.Globalization.DateTimeStyles.RoundtripKind, out var at)) return null;
+            return (color, at.ToUniversalTime());
+        }
+
+        static Dictionary<string, object> WithColor(string type, Dictionary<string, object> body, Rgb color)
+        {
+            var copy = Json.ReadObject(Json.Write(body));
+            if (type == "StrSingleLightSetting")
+            {
+                foreach (var effect in Json.List(copy.Get("LightEffectSetArray")).OfType<Dictionary<string, object>>())
+                    effect["UserColors"] = Enumerable.Repeat(ColorObject(color), Math.Max(1, Json.List(effect.Get("UserColors"))?.Count ?? 1)).ToList();
+            }
+            else
+            {
+                copy["Color"] = Enumerable.Repeat(ColorObject(color), Math.Max(1, Json.List(copy.Get("Color"))?.Count ?? 1)).ToList();
+            }
+            return copy;
+        }
+
+        // Same shape System.Windows.Media.Color serialises to, which is what the L-Connect UI sends.
+        static Dictionary<string, object> ColorObject(Rgb c)
+        {
+            double Linear(byte v)
+            {
+                var s = v / 255.0;
+                return Math.Round(s <= 0.04045 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4), 9);
+            }
+            return new Dictionary<string, object>
+            {
+                ["ColorContext"] = null, ["A"] = 255, ["R"] = (int)c.R, ["G"] = (int)c.G, ["B"] = (int)c.B,
+                ["ScA"] = 1, ["ScR"] = Linear(c.R), ["ScG"] = Linear(c.G), ["ScB"] = Linear(c.B),
+            };
         }
 
         static Dictionary<string, object> LoadProfile(string txPath)

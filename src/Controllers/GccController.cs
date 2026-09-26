@@ -8,13 +8,13 @@ using System.Threading.Tasks;
 using System.Windows.Automation;
 using System.Xml.Linq;
 using Microsoft.Win32;
-using PcControl.Core;
+using RgbSwitch.Core;
 
-namespace PcControl.Controllers
+namespace RgbSwitch.Controllers
 {
     // Drives GIGABYTE Control Center's own "RGB Fusion" page (motherboard + RAM in sync mode)
     // by clicking its pattern buttons, then checks the result in GCC's usdata2.xml.
-    public sealed class GccController : IDeviceController
+    public sealed class GccController : IDeviceController, IColorTarget
     {
         const string WindowTitle = "GIGABYTE CONTROL CENTER";
         const uint ShowMessage = 0x9990;
@@ -82,7 +82,53 @@ namespace PcControl.Controllers
             if (!BothDevicesSynced()) throw new NotSupportedException("anakart ve RAM RGB Fusion'da senkron değil");
         }
 
-        static void Apply(int mode, CancellationToken ct)
+        public Task ApplyColorAsync(Rgb color, CancellationToken ct) => Task.Run(() =>
+        {
+            Precheck();
+            if (ReadSetting().Mode == ModeOff) throw new InvalidOperationException("ışıklar kapalıyken renk verilemez");
+            OnRgbFusionPage(ct, (window, hwnd) =>
+            {
+                // The picker's R/G/B boxes apply the colour when Enter is pressed in any of them.
+                foreach (var (id, value) in new[] { ("txbx_cR", color.R), ("txbx_cG", color.G), ("txbx_cB", color.B) })
+                {
+                    var box = Desktop.WaitFor(() => window.FindFirst(TreeScope.Descendants,
+                            new PropertyCondition(AutomationElement.AutomationIdProperty, id)), TimeSpan.FromSeconds(3), ct)
+                        ?? throw new InvalidOperationException("GCC renk kutuları bulunamadı");
+                    ((ValuePattern)box.GetCurrentPattern(ValuePattern.Pattern)).SetValue(value.ToString());
+                }
+                var blue = window.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, "txbx_cB"));
+                Desktop.BringToFront(hwnd);
+                blue.SetFocus();
+                Desktop.PressKey(Desktop.VkReturn);
+
+                var expected = "00" + color.Hex;
+                var until = DateTime.UtcNow + TimeSpan.FromSeconds(4);
+                while (!string.Equals(ReadSetting().Color, expected, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (DateTime.UtcNow > until) throw new InvalidOperationException("GCC yeni rengi kaydetmedi");
+                    Thread.Sleep(150);
+                }
+            });
+        }, ct);
+
+        static void Apply(int mode, CancellationToken ct) => OnRgbFusionPage(ct, (window, hwnd) =>
+        {
+            var buttonText = ModeButtons[mode];
+            var pattern = Desktop.WaitFor(() => Desktop.FindVisibleByName(window, buttonText, ControlType.Text), TimeSpan.FromSeconds(5), ct)
+                ?? throw new InvalidOperationException($"GCC'de '{buttonText}' düğmesi bulunamadı");
+            Desktop.BringToFront(hwnd);
+            Thread.Sleep(150);
+            Desktop.Click(pattern);
+
+            var until = DateTime.UtcNow + TimeSpan.FromSeconds(4);
+            while (ReadSetting().Mode != mode)
+            {
+                if (DateTime.UtcNow > until) throw new InvalidOperationException($"GCC '{buttonText}' tıklamasını kaydetmedi");
+                Thread.Sleep(150);
+            }
+        });
+
+        static void OnRgbFusionPage(CancellationToken ct, Action<AutomationElement, IntPtr> action)
         {
             var hwnd = Desktop.FindWindow("GCC", WindowTitle);
             if (hwnd == IntPtr.Zero) throw new InvalidOperationException("GCC penceresi bulunamadı");
@@ -94,27 +140,15 @@ namespace PcControl.Controllers
                     ?? throw new InvalidOperationException("GCC penceresi açılmadı");
                 Desktop.BringToFront(hwnd);
 
-                var buttonText = ModeButtons[mode];
-                var pattern = Desktop.FindVisibleByName(window, buttonText, ControlType.Text);
-                if (pattern == null)
+                // The pattern buttons (STATIC … OFF) only exist on the RGB Fusion page.
+                if (Desktop.FindVisibleByName(window, "OFF", ControlType.Text) == null)
                 {
                     var tab = Desktop.WaitFor(() => Desktop.FindVisibleByName(window, "RGB Fusion", ControlType.Button), TimeSpan.FromSeconds(3), ct)
                         ?? throw new InvalidOperationException("GCC'de 'RGB Fusion' sekmesi bulunamadı");
                     Desktop.Click(tab);
-                    pattern = Desktop.WaitFor(() => Desktop.FindVisibleByName(window, buttonText, ControlType.Text), TimeSpan.FromSeconds(5), ct)
-                        ?? throw new InvalidOperationException($"GCC'de '{buttonText}' düğmesi bulunamadı");
+                    Desktop.WaitFor(() => Desktop.FindVisibleByName(window, "OFF", ControlType.Text), TimeSpan.FromSeconds(5), ct);
                 }
-
-                Desktop.BringToFront(hwnd);
-                Thread.Sleep(150);
-                Desktop.Click(pattern);
-
-                var until = DateTime.UtcNow + TimeSpan.FromSeconds(4);
-                while (ReadSetting().Mode != mode)
-                {
-                    if (DateTime.UtcNow > until) throw new InvalidOperationException($"GCC '{buttonText}' tıklamasını kaydetmedi");
-                    Thread.Sleep(150);
-                }
+                action(window, hwnd);
             }
             finally
             {

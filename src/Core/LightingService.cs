@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace PcControl.Core
+namespace RgbSwitch.Core
 {
     public sealed class DeviceOutcome
     {
@@ -16,7 +16,7 @@ namespace PcControl.Core
     public sealed class LightingService
     {
         // Named so the tray app and a `--toggle` shortcut never drive the vendor apps at the same time.
-        static readonly Semaphore CrossProcessGate = new Semaphore(1, 1, @"Local\PcControl.Operation");
+        static readonly Semaphore CrossProcessGate = new Semaphore(1, 1, @"Local\RgbSwitch.Operation");
 
         SavedState state = StateStore.Load();
 
@@ -29,7 +29,37 @@ namespace PcControl.Core
         public bool LightsOff => state.LightsOff;
         public DateTime? ChangedAt => state.ChangedAt;
 
+        public string Color => state.Color;
+
+        public IEnumerable<IDeviceController> ColorTargets => Controllers.Where(c => c is IColorTarget);
+
         public void Reload() => state = StateStore.Load();
+
+        public async Task<List<DeviceOutcome>> ApplyColorAsync(Rgb color, IEnumerable<IDeviceController> targets, CancellationToken ct)
+        {
+            await Task.Run(() => CrossProcessGate.WaitOne(), ct).ConfigureAwait(false);
+            try
+            {
+                state = StateStore.Load();
+                if (state.LightsOff) throw new InvalidOperationException("önce ışıkları aç");
+                var outcomes = new List<DeviceOutcome>();
+                foreach (var controller in targets.Where(c => c is IColorTarget))
+                {
+                    var outcome = new DeviceOutcome { Controller = controller };
+                    try { await ((IColorTarget)controller).ApplyColorAsync(color, ct).ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                    catch (Exception e) { outcome.Error = e; }
+                    outcomes.Add(outcome);
+                }
+                state.Color = color.Hex;
+                StateStore.Save(state);
+                return outcomes;
+            }
+            finally
+            {
+                CrossProcessGate.Release();
+            }
+        }
 
         public Task<List<DeviceOutcome>> TurnOffAsync(CancellationToken ct) => RunAsync(_ => true, ct);
 

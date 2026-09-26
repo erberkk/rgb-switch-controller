@@ -1,8 +1,8 @@
-# PC Control
+# RGB Switch
 
 One button that turns every RGB light and screen in a PC off, and a second press that brings each of them back exactly as it was.
 
-PC Control doesn't talk to the hardware itself. It drives each vendor's own app through the same path that app's UI uses. Before switching off it saves the current state, and it restores that state when switching back on. The UI is in Turkish.
+RGB Switch doesn't talk to the hardware itself. It drives each vendor's own app through the same path that app's UI uses. Before switching off it saves the current state, and it restores that state when switching back on. The UI is in Turkish.
 
 ## Supported setups
 
@@ -21,12 +21,12 @@ Requirements: Windows 10/11, .NET Framework 4.8, and Visual Studio Build Tools w
 
 ```powershell
 .\build.ps1                      # downloads the .NET 4.8 reference assemblies on first run
-.\bin\PcControl.exe --install    # one UAC prompt
+.\bin\RgbSwitch.exe --install    # one UAC prompt
 ```
 
-The vendor apps run elevated, so PcControl has to as well. `--install` does three things:
-- copies the exe to `C:\Program Files\PcControl`;
-- registers two "run with highest privileges" scheduled tasks, `PcControl` and `PcControl Toggle`;
+The vendor apps run elevated, so RgbSwitch has to as well. `--install` does three things:
+- copies the exe to `C:\Program Files\RgbSwitch`;
+- registers two "run with highest privileges" scheduled tasks, `RgbSwitch` and `RgbSwitch Toggle`;
 - adds a desktop shortcut.
 
 After that, launching the app doesn't prompt again. To update, rebuild and run `--install` again.
@@ -35,9 +35,9 @@ After that, launching the app doesn't prompt again. To update, rebuild and run `
 
 - Window: press the power button. Closing the window hides the app to the tray.
 - Tray: right-click the icon to toggle lights or exit.
-- Without a window: `PcControl.exe --toggle`, `--off` or `--on`.
+- Without a window: `RgbSwitch.exe --toggle`, `--off` or `--on`.
 
-Saved states are stored in `%LOCALAPPDATA%\PcControl\state.json`.
+Saved states are stored in `%LOCALAPPDATA%\RgbSwitch\state.json`.
 
 ## Adding a device
 

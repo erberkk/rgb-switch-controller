@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Web.Script.Serialization;
 
-namespace PcControl.Core
+namespace RgbSwitch.Core
 {
     public static class Json
     {

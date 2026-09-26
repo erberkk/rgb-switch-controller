@@ -14,6 +14,6 @@ $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.e
 $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
 if (-not $msbuild) { throw 'MSBuild not found (install Visual Studio Build Tools).' }
 
-& $msbuild (Join-Path $root 'src\PcControl.csproj') /nologo /v:m /restore:false "/p:TargetFrameworkRootPath=$refs\build"
+& $msbuild (Join-Path $root 'src\RgbSwitch.csproj') /nologo /v:m /restore:false "/p:TargetFrameworkRootPath=$refs\build"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Write-Host "Built: $(Join-Path $root 'bin\PcControl.exe')"
+Write-Host "Built: $(Join-Path $root 'bin\RgbSwitch.exe')"

@@ -10,9 +10,9 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using PcControl.Core;
+using RgbSwitch.Core;
 
-namespace PcControl
+namespace RgbSwitch
 {
     public abstract class Observable : INotifyPropertyChanged
     {
@@ -52,61 +52,21 @@ namespace PcControl
         }
     }
 
-    public sealed class InputChip : Observable
+    public sealed class TargetChip : Observable
     {
-        public MonitorCard Card;
-        public int Code;
-        public string Name { get; set; }
+        public IDeviceController Controller;
+        public string Title { get; set; }
 
-        bool isCurrent;
-        public bool IsCurrent { get => isCurrent; set { isCurrent = value; Raise(nameof(IsCurrent)); } }
-    }
-
-    public sealed class MonitorCard : Observable
-    {
-        public MonitorCard(MonitorInfo info)
-        {
-            Index = info.Index;
-            Model = info.Model;
-            CanPower = info.CanPowerOff;
-            SupportsPixelCleaning = info.SupportsPixelCleaning;
-            CleaningText = info.PixelCleaningActive == true ? "Pixel cleaning sürüyor" : "Pixel cleaning başlat";
-            Inputs = info.Inputs.Select(i => new InputChip { Card = this, Code = i.Code, Name = i.Name, IsCurrent = i.Code == info.CurrentInput }).ToList();
-            UpdateStatus();
-        }
-
-        public int Index { get; }
-        public string Model { get; }
-        public bool CanPower { get; }
-        public bool SupportsPixelCleaning { get; }
-
-        string cleaningText;
-        public string CleaningText { get => cleaningText; set { cleaningText = value; Raise(nameof(CleaningText)); } }
-        public string PowerTip => "Monitörü kapat (açmak için monitörün düğmesi gerekebilir)";
-        public List<InputChip> Inputs { get; }
-
-        string status;
-        public string Status { get => status; set { status = value; Raise(nameof(Status)); } }
-
-        public void Select(int code)
-        {
-            foreach (var chip in Inputs) chip.IsCurrent = chip.Code == code;
-            UpdateStatus();
-        }
-
-        void UpdateStatus()
-        {
-            var current = Inputs.FirstOrDefault(i => i.IsCurrent);
-            Status = current == null ? "giriş okunamadı" : $"Şu an {current.Name}";
-        }
+        bool selected = true;
+        public bool Selected { get => selected; set { selected = value; Raise(nameof(Selected)); } }
     }
 
     static class Palette
     {
-        public static readonly Brush Ok = Freeze(Colors.White);
-        public static readonly Brush Warn = Freeze(Color.FromRgb(0xFB, 0xBF, 0x24));
-        public static readonly Brush Error = Freeze(Color.FromRgb(0xF8, 0x71, 0x71));
-        public static readonly Brush Idle = Freeze(Color.FromRgb(0x3A, 0x3A, 0x3A));
+        public static readonly Brush Ok = Freeze(Color.FromRgb(0x30, 0xD1, 0x58));
+        public static readonly Brush Warn = Freeze(Color.FromRgb(0xFF, 0xD6, 0x0A));
+        public static readonly Brush Error = Freeze(Color.FromRgb(0xFF, 0x45, 0x3A));
+        public static readonly Brush Idle = Freeze(Color.FromRgb(0x3A, 0x3A, 0x3F));
 
         static Brush Freeze(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 
@@ -120,12 +80,19 @@ namespace PcControl
 
     public partial class MainWindow : Window
     {
+        static readonly string[] PresetColors =
+            { "FFFFFF", "FFB46B", "FF3B30", "FF9500", "FFD60A", "30D158", "64D2FF", "0A84FF", "BF5AF2", "FF375F" };
+
         readonly LightingService service;
         readonly ObservableCollection<DeviceRow> rows;
-        readonly ObservableCollection<MonitorCard> monitors = new ObservableCollection<MonitorCard>();
+        readonly List<TargetChip> targets;
         Storyboard spin;
         bool busy;
         DateTime lastProbe = DateTime.MinValue;
+
+        // Picker state in HSV, the colour currently shown in the picker.
+        double hue, saturation, value;
+        bool dragging;
 
         public MainWindow(LightingService service)
         {
@@ -133,20 +100,39 @@ namespace PcControl
             this.service = service;
             rows = new ObservableCollection<DeviceRow>(service.Controllers.Select(c => new DeviceRow(c)));
             DeviceList.ItemsSource = rows;
-            MonitorList.ItemsSource = monitors;
+            targets = service.ColorTargets.Select(c => new TargetChip { Controller = c, Title = c.Title }).ToList();
+            TargetList.ItemsSource = targets;
             foreach (var row in rows) row.Show(ProbeResult.Of(DeviceState.Unknown, "kontrol ediliyor…"));
 
-            Loaded += async (_, __) => { ApplyVisual(service.LightsOff, animate: false); await RefreshAllAsync(); };
+            foreach (var hex in PresetColors)
+            {
+                Rgb.TryParse(hex, out var rgb);
+                var swatch = new Button { Style = (Style)FindResource("Swatch"), Background = new SolidColorBrush(ToColor(rgb)), Tag = rgb, ToolTip = "#" + hex };
+                swatch.Click += (s, e) => SetPicker((Rgb)((Button)s).Tag);
+                Presets.Children.Add(swatch);
+            }
+
+            SvArea.SizeChanged += (_, __) => UpdatePicker();
+            Rgb.TryParse(service.Color ?? "FFB46B", out var initial);
+            Loaded += async (_, __) =>
+            {
+                SetPicker(initial);
+                ApplyAccent(initial);
+                ApplyVisual(service.LightsOff, animate: false);
+                await ProbeAllAsync();
+            };
             Activated += async (_, __) =>
             {
                 if (busy || DateTime.Now - lastProbe < TimeSpan.FromSeconds(5)) return;
                 service.Reload();
                 ApplyVisual(service.LightsOff, animate: true);
-                await RefreshAllAsync();
+                await ProbeAllAsync();
             };
         }
 
         public event EventHandler LightsChanged;
+
+        Rgb PickedColor => HsvToRgb(hue, saturation, value);
 
         public async Task ToggleAsync()
         {
@@ -158,12 +144,7 @@ namespace PcControl
             try
             {
                 var outcomes = await Task.Run(() => service.ToggleAsync(CancellationToken.None));
-                foreach (var outcome in outcomes.Where(o => !o.Ok))
-                    rows.First(r => r.Controller == outcome.Controller).ShowError(outcome.Error);
-                var failed = outcomes.Where(o => !o.Ok).ToList();
-                Footer.Text = failed.Count == 0
-                    ? $"{outcomes.Count} cihazın tamamı {(targetOff ? "kapatıldı" : "açıldı")} · {DateTime.Now:HH:mm}"
-                    : $"{outcomes.Count - failed.Count}/{outcomes.Count} cihaz tamam · sorun: {string.Join(", ", failed.Select(f => f.Controller.Title))}";
+                ShowOutcomes(outcomes, targetOff ? "kapatıldı" : "açıldı");
             }
             catch (Exception e)
             {
@@ -176,15 +157,50 @@ namespace PcControl
                 busy = false;
                 LightsChanged?.Invoke(this, EventArgs.Empty);
             }
-            await ProbeDevicesAsync(keepErrors: true);
+            await ProbeAllAsync(keepErrors: true);
         }
 
-        async Task RefreshAllAsync()
+        async void OnApplyColor(object sender, RoutedEventArgs e)
         {
-            await Task.WhenAll(ProbeDevicesAsync(), RefreshMonitorsAsync());
+            if (busy) return;
+            var chosen = targets.Where(t => t.Selected).Select(t => t.Controller).ToList();
+            if (chosen.Count == 0) { Footer.Text = "Renk için en az bir cihaz seç"; return; }
+            busy = true;
+            ApplyButton.IsEnabled = false;
+            PowerButton.IsEnabled = false;
+            ApplyText.Text = "Uygulanıyor…";
+            var color = PickedColor;
+            try
+            {
+                var outcomes = await Task.Run(() => service.ApplyColorAsync(color, chosen, CancellationToken.None));
+                ApplyAccent(color);
+                ShowOutcomes(outcomes, $"{color} rengine geçti");
+            }
+            catch (Exception ex)
+            {
+                Footer.Text = "Renk uygulanamadı: " + ex.Message;
+            }
+            finally
+            {
+                ApplyText.Text = "Tümüne uygula";
+                ApplyButton.IsEnabled = !service.LightsOff;
+                PowerButton.IsEnabled = true;
+                busy = false;
+            }
+            await ProbeAllAsync(keepErrors: true);
         }
 
-        async Task ProbeDevicesAsync(bool keepErrors = false)
+        void ShowOutcomes(List<DeviceOutcome> outcomes, string verb)
+        {
+            foreach (var outcome in outcomes.Where(o => !o.Ok))
+                rows.First(r => r.Controller == outcome.Controller).ShowError(outcome.Error);
+            var failed = outcomes.Where(o => !o.Ok).ToList();
+            Footer.Text = failed.Count == 0
+                ? $"{outcomes.Count} cihaz {verb} · {DateTime.Now:HH:mm}"
+                : $"{outcomes.Count - failed.Count}/{outcomes.Count} cihaz tamam · sorun: {string.Join(", ", failed.Select(f => f.Controller.Title))}";
+        }
+
+        async Task ProbeAllAsync(bool keepErrors = false)
         {
             lastProbe = DateTime.Now;
             await Task.WhenAll(rows.Select(async row =>
@@ -197,78 +213,129 @@ namespace PcControl
                 Footer.Text = $"Son değişiklik: {at:dd.MM HH:mm}";
         }
 
-        async Task RefreshMonitorsAsync()
+        // ---- colour picker ----
+
+        void OnSvDown(object sender, MouseButtonEventArgs e) { dragging = true; SvArea.CaptureMouse(); PickSv(e.GetPosition(SvArea)); }
+
+        void OnSvMove(object sender, MouseEventArgs e) { if (dragging && SvArea.IsMouseCaptured) PickSv(e.GetPosition(SvArea)); }
+
+        void OnHueDown(object sender, MouseButtonEventArgs e) { dragging = true; HueArea.CaptureMouse(); PickHue(e.GetPosition(HueArea)); }
+
+        void OnHueMove(object sender, MouseEventArgs e) { if (dragging && HueArea.IsMouseCaptured) PickHue(e.GetPosition(HueArea)); }
+
+        void OnPickerUp(object sender, MouseButtonEventArgs e) { dragging = false; ((UIElement)sender).ReleaseMouseCapture(); }
+
+        void PickSv(Point p)
         {
-            List<MonitorInfo> found;
-            try { found = await Task.Run(() => Monitors.List()); }
-            catch (Exception e) { Footer.Text = "Monitörler okunamadı: " + e.Message; return; }
-            monitors.Clear();
-            foreach (var info in found.Where(m => m.Inputs.Count > 0 || m.CanPowerOff)) monitors.Add(new MonitorCard(info));
-            NoMonitors.Visibility = monitors.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            saturation = Clamp(p.X / SvArea.ActualWidth);
+            value = 1 - Clamp(p.Y / SvArea.ActualHeight);
+            UpdatePicker();
         }
 
-        async void OnMonitorInput(object sender, RoutedEventArgs e)
+        void PickHue(Point p)
         {
-            var chip = (InputChip)((FrameworkElement)sender).Tag;
-            if (chip.IsCurrent) return;
-            try
+            hue = Clamp(p.X / HueArea.ActualWidth) * 359.999;
+            UpdatePicker();
+        }
+
+        void OnHexKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter) return;
+            OnHexCommit(sender, e);
+            e.Handled = true;
+        }
+
+        void OnHexCommit(object sender, RoutedEventArgs e)
+        {
+            if (Rgb.TryParse(HexBox.Text, out var rgb)) SetPicker(rgb);
+            else HexBox.Text = "#" + PickedColor.Hex;
+        }
+
+        void SetPicker(Rgb rgb)
+        {
+            (hue, saturation, value) = RgbToHsv(rgb);
+            UpdatePicker();
+        }
+
+        void UpdatePicker()
+        {
+            var rgb = PickedColor;
+            var color = ToColor(rgb);
+            SvHue.Color = ToColor(HsvToRgb(hue, 1, 1));
+            PreviewBrush.Color = color;
+            ApplyBrush.Color = color;
+            ApplyTextBrush.Color = Luminance(rgb) > 0.6 ? Colors.Black : Colors.White;
+            if (!HexBox.IsKeyboardFocused) HexBox.Text = "#" + rgb.Hex;
+
+            if (SvArea.ActualWidth > 0)
             {
-                await Task.Run(() => Monitors.SetInput(chip.Card.Index, chip.Code));
-                chip.Card.Select(chip.Code);
-                Footer.Text = $"{chip.Card.Model} → {chip.Name}";
+                Canvas.SetLeft(SvThumb, saturation * SvArea.ActualWidth - SvThumb.Width / 2);
+                Canvas.SetTop(SvThumb, (1 - value) * SvArea.ActualHeight - SvThumb.Height / 2);
+                Canvas.SetLeft(HueThumb, hue / 360 * HueArea.ActualWidth - HueThumb.Width / 2);
             }
-            catch (Exception ex) { Footer.Text = $"{chip.Card.Model}: {ex.Message}"; }
         }
 
-        async void OnMonitorPower(object sender, RoutedEventArgs e)
+        // The power button and title dot take the last applied colour.
+        void ApplyAccent(Rgb rgb)
         {
-            var card = (MonitorCard)((FrameworkElement)sender).Tag;
-            try
-            {
-                await Task.Run(() => Monitors.SetPower(card.Index, on: false));
-                Footer.Text = $"{card.Model} kapatıldı";
-                await Task.Delay(2500);
-                await RefreshMonitorsAsync();
-            }
-            catch (Exception ex) { Footer.Text = $"{card.Model}: {ex.Message}"; }
-        }
-
-        async void OnPixelCleaning(object sender, RoutedEventArgs e)
-        {
-            var card = (MonitorCard)((FrameworkElement)sender).Tag;
-            var answer = MessageBox.Show(this,
-                $"{card.Model} için pixel cleaning başlatılsın mı?\n\nEkran birkaç dakika kararır; bu sürede monitörü kapatma.",
-                "Pixel cleaning", MessageBoxButton.OKCancel, MessageBoxImage.Question);
-            if (answer != MessageBoxResult.OK) return;
-            try
-            {
-                await Task.Run(() => Monitors.StartPixelCleaning(card.Index));
-                card.CleaningText = "Pixel cleaning sürüyor";
-                Footer.Text = $"{card.Model}: pixel cleaning başladı";
-            }
-            catch (Exception ex) { Footer.Text = $"{card.Model}: {ex.Message}"; }
-        }
-
-        void OnSleepDisplays(object sender, RoutedEventArgs e) => Monitors.SleepAll();
-
-        async void OnRefresh(object sender, RoutedEventArgs e)
-        {
-            service.Reload();
+            var c = ToColor(rgb);
+            TitleDot.Color = c;
+            accent = c;
             ApplyVisual(service.LightsOff, animate: true);
-            await RefreshAllAsync();
         }
+
+        Color accent = Color.FromRgb(0xFF, 0xB4, 0x6B);
 
         void ApplyVisual(bool off, bool animate)
         {
             StateTitle.Text = off ? "Işıklar kapalı" : "Işıklar açık";
             StateHint.Text = off ? "Açmak için dokun" : "Kapatmak için dokun";
+            ApplyButton.IsEnabled = !off && !busy;
+            ApplyButton.ToolTip = off ? "Renk vermek için önce ışıkları aç" : null;
 
-            var d = animate ? TimeSpan.FromMilliseconds(300) : TimeSpan.Zero;
-            DiscFill.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(off ? Color.FromRgb(0x11, 0x11, 0x11) : Colors.White, d));
-            DiscStroke.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(off ? Color.FromRgb(0x33, 0x33, 0x33) : Colors.White, d));
-            GlyphFill.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(off ? Color.FromRgb(0x6A, 0x6A, 0x6A) : Colors.Black, d));
-            Glow.BeginAnimation(OpacityProperty, new DoubleAnimation(off ? 0 : 1, d));
+            var d = animate ? TimeSpan.FromMilliseconds(320) : TimeSpan.Zero;
+            var dim = Color.FromRgb(0x3A, 0x3A, 0x3F);
+            Animate(RingBrush, off ? dim : accent, d);
+            Animate(GlyphBrush, off ? Color.FromRgb(0x5C, 0x5C, 0x63) : accent, d);
+            HaloStop.BeginAnimation(GradientStop.ColorProperty, new ColorAnimation(off ? Colors.Transparent : Color.FromArgb(0x50, accent.R, accent.G, accent.B), d));
+            HaloEdge.BeginAnimation(GradientStop.ColorProperty, new ColorAnimation(Color.FromArgb(0, accent.R, accent.G, accent.B), d));
         }
+
+        static void Animate(SolidColorBrush brush, Color to, TimeSpan d) =>
+            brush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(to, d) { EasingFunction = new CubicEase() });
+
+        static double Clamp(double v) => v < 0 ? 0 : v > 1 ? 1 : v;
+
+        static Color ToColor(Rgb c) => Color.FromRgb(c.R, c.G, c.B);
+
+        static double Luminance(Rgb c) => (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255;
+
+        static Rgb HsvToRgb(double h, double s, double v)
+        {
+            var c = v * s;
+            var x = c * (1 - Math.Abs(h / 60 % 2 - 1));
+            var m = v - c;
+            double r, g, b;
+            if (h < 60) (r, g, b) = (c, x, 0);
+            else if (h < 120) (r, g, b) = (x, c, 0);
+            else if (h < 180) (r, g, b) = (0, c, x);
+            else if (h < 240) (r, g, b) = (0, x, c);
+            else if (h < 300) (r, g, b) = (x, 0, c);
+            else (r, g, b) = (c, 0, x);
+            byte B(double f) => (byte)Math.Round((f + m) * 255);
+            return new Rgb(B(r), B(g), B(b));
+        }
+
+        static (double h, double s, double v) RgbToHsv(Rgb c)
+        {
+            double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0;
+            double max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b)), d = max - min;
+            double h = d == 0 ? 0 : max == r ? 60 * ((g - b) / d % 6) : max == g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4);
+            if (h < 0) h += 360;
+            return (h, max == 0 ? 0 : d / max, max);
+        }
+
+        // ---- window ----
 
         void SetSpinner(bool on)
         {
@@ -286,6 +353,13 @@ namespace PcControl
         }
 
         async void OnPowerClick(object sender, RoutedEventArgs e) => await ToggleAsync();
+
+        async void OnRefresh(object sender, RoutedEventArgs e)
+        {
+            service.Reload();
+            ApplyVisual(service.LightsOff, animate: true);
+            await ProbeAllAsync();
+        }
 
         void OnDragWindow(object sender, MouseButtonEventArgs e)
         {
