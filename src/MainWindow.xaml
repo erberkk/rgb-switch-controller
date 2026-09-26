@@ -14,6 +14,7 @@
         <SolidColorBrush x:Key="Card" Color="#0B0B0B"/>
         <SolidColorBrush x:Key="Raised" Color="#151515"/>
         <FontFamily x:Key="Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+        <BooleanToVisibilityConverter x:Key="Visible"/>
 
         <Style x:Key="Label" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource Faint}"/>
@@ -274,6 +275,13 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
+                                        <Button Style="{StaticResource WideButton}" Margin="0,12,0,0" Tag="{Binding}" Click="OnPixelCleaning"
+                                                Visibility="{Binding SupportsPixelCleaning, Converter={StaticResource Visible}}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE9F5;" FontFamily="{StaticResource Icons}" FontSize="13" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <TextBlock Text="{Binding CleaningText}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace PcControl.Core
 {
@@ -21,6 +22,8 @@ namespace PcControl.Core
         public int? CurrentInput;
         public bool? PoweredOn;
         public bool CanPowerOff;
+        public bool SupportsPixelCleaning;
+        public bool? PixelCleaningActive;
     }
 
     // Monitor control over DDC/CI (MCCS VCP 0x60 input source, 0xD6 power mode) through dxva2,
@@ -31,6 +34,11 @@ namespace PcControl.Core
         const byte VcpPower = 0xD6;
         const uint PowerOn = 0x01;
         const uint PowerOff = 0x05;
+
+        // ASUS "toggle settings" register; bit 0x10 starts OLED pixel cleaning (from DisplayWidget Center).
+        const byte VcpAsusToggles = 0xFD;
+        const uint PixelCleaningBit = 0x10;
+        static readonly Regex AsusOled = new Regex(@"^(PG|XG)\d{2}[A-Z]*D(M|MG|P)$");
 
         static readonly Dictionary<int, string> InputNames = new Dictionary<int, string>
         {
@@ -58,10 +66,11 @@ namespace PcControl.Core
                     var value = Convert.ToInt32(code, 16);
                     info.Inputs.Add(new MonitorInput { Code = value, Name = InputNames.TryGetValue(value, out var n) ? n : $"Giriş {value:X2}" });
                 }
-                if (GetVCPFeatureAndVCPFeatureReply(handle, VcpInput, IntPtr.Zero, out var current, out _))
-                    info.CurrentInput = (int)(current & 0xFF);
-                if (GetVCPFeatureAndVCPFeatureReply(handle, VcpPower, IntPtr.Zero, out var power, out _))
-                    info.PoweredOn = power == PowerOn;
+                if (TryGet(handle, VcpInput, out var current)) info.CurrentInput = (int)(current & 0xFF);
+                if (TryGet(handle, VcpPower, out var power)) info.PoweredOn = power == PowerOn;
+                info.SupportsPixelCleaning = AsusOled.IsMatch(info.Model) && caps.Contains("FD(");
+                if (info.SupportsPixelCleaning && TryGet(handle, VcpAsusToggles, out var toggles))
+                    info.PixelCleaningActive = (toggles & PixelCleaningBit) != 0;
                 result.Add(info);
             });
             return result;
@@ -70,6 +79,33 @@ namespace PcControl.Core
         public static void SetInput(int index, int code) => Set(index, VcpInput, (uint)code);
 
         public static void SetPower(int index, bool on) => Set(index, VcpPower, on ? PowerOn : PowerOff);
+
+        public static void StartPixelCleaning(int index)
+        {
+            var done = false;
+            ForEachPhysical((handle, i) =>
+            {
+                if (i != index) return;
+                if (!TryGet(handle, VcpAsusToggles, out var toggles)) throw new InvalidOperationException("monitör ayarı okunamadı");
+                Thread.Sleep(50);
+                if (!SetVCPFeature(handle, VcpAsusToggles, toggles | PixelCleaningBit))
+                    throw new InvalidOperationException("monitör pixel cleaning komutunu kabul etmedi");
+                done = true;
+            });
+            if (!done) throw new InvalidOperationException("monitör bulunamadı");
+        }
+
+        // DDC/CI is slow and drops back-to-back requests; space them out and retry like the vendor tool.
+        static bool TryGet(IntPtr handle, byte code, out uint value)
+        {
+            for (var attempt = 0; attempt < 4; attempt++)
+            {
+                Thread.Sleep(attempt == 0 ? 40 : 120);
+                if (GetVCPFeatureAndVCPFeatureReply(handle, code, IntPtr.Zero, out value, out _)) return true;
+            }
+            value = 0;
+            return false;
+        }
 
         // Puts every display to sleep the way Windows' own idle timer does; any input wakes them.
         public static void SleepAll() => SendMessage(new IntPtr(0xFFFF), 0x0112, new IntPtr(0xF170), new IntPtr(2));
@@ -80,6 +116,7 @@ namespace PcControl.Core
             ForEachPhysical((handle, i) =>
             {
                 if (i != index) return;
+                Thread.Sleep(40);
                 if (!SetVCPFeature(handle, vcp, value))
                     throw new InvalidOperationException("monitör komutu kabul etmedi (DDC/CI kapalı olabilir)");
                 done = true;

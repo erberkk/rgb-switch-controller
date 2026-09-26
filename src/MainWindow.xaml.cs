@@ -69,6 +69,8 @@ namespace PcControl
             Index = info.Index;
             Model = info.Model;
             CanPower = info.CanPowerOff;
+            SupportsPixelCleaning = info.SupportsPixelCleaning;
+            CleaningText = info.PixelCleaningActive == true ? "Pixel cleaning sürüyor" : "Pixel cleaning başlat";
             Inputs = info.Inputs.Select(i => new InputChip { Card = this, Code = i.Code, Name = i.Name, IsCurrent = i.Code == info.CurrentInput }).ToList();
             UpdateStatus();
         }
@@ -76,6 +78,10 @@ namespace PcControl
         public int Index { get; }
         public string Model { get; }
         public bool CanPower { get; }
+        public bool SupportsPixelCleaning { get; }
+
+        string cleaningText;
+        public string CleaningText { get => cleaningText; set { cleaningText = value; Raise(nameof(CleaningText)); } }
         public string PowerTip => "Monitörü kapat (açmak için monitörün düğmesi gerekebilir)";
         public List<InputChip> Inputs { get; }
 
@@ -223,6 +229,22 @@ namespace PcControl
                 Footer.Text = $"{card.Model} kapatıldı";
                 await Task.Delay(2500);
                 await RefreshMonitorsAsync();
+            }
+            catch (Exception ex) { Footer.Text = $"{card.Model}: {ex.Message}"; }
+        }
+
+        async void OnPixelCleaning(object sender, RoutedEventArgs e)
+        {
+            var card = (MonitorCard)((FrameworkElement)sender).Tag;
+            var answer = MessageBox.Show(this,
+                $"{card.Model} için pixel cleaning başlatılsın mı?\n\nEkran birkaç dakika kararır; bu sürede monitörü kapatma.",
+                "Pixel cleaning", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.OK) return;
+            try
+            {
+                await Task.Run(() => Monitors.StartPixelCleaning(card.Index));
+                card.CleaningText = "Pixel cleaning sürüyor";
+                Footer.Text = $"{card.Model}: pixel cleaning başladı";
             }
             catch (Exception ex) { Footer.Text = $"{card.Model}: {ex.Message}"; }
         }
