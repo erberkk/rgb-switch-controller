@@ -74,7 +74,7 @@ namespace RgbSwitch.Controllers
                 Thread.Sleep(100);
                 Desktop.PressKey(Desktop.VkEnd);
                 for (var i = 0; i < 10; i++) Desktop.PressKey(Desktop.VkBack);
-                Desktop.Type(color.Hex);
+                Desktop.TypeHex(color.Hex);
                 Desktop.PressKey(Desktop.VkReturn);
                 Thread.Sleep(300);
                 if (ReadSelected(window) != DefaultStyle) throw new InvalidOperationException("TRIXX Custom Color seçimi kayboldu");

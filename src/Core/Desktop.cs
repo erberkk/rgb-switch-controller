@@ -117,12 +117,13 @@ namespace RgbSwitch.Core
             Thread.Sleep(40);
         }
 
-        public static void Type(string text)
+        // Real key strokes (not VK_PACKET unicode input): some vendor boxes only accept key codes.
+        public static void TypeHex(string hex)
         {
-            foreach (var ch in text)
+            foreach (var ch in hex.ToUpperInvariant())
             {
-                var inputs = new[] { KeyInput(0, ch, 0x0004), KeyInput(0, ch, 0x0004 | 0x0002) };
-                SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
+                if (!Uri.IsHexDigit(ch)) throw new ArgumentException("hex değil: " + hex);
+                PressKey(ch);
                 Thread.Sleep(15);
             }
         }
