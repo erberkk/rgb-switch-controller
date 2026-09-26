@@ -6,9 +6,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Automation;
-using RgbSwitch.Core;
+using PcControl.Core;
 
-namespace RgbSwitch.Controllers
+namespace PcControl.Controllers
 {
     // Sapphire TRIXX exposes its tabs to UI Automation but not the Glow page content, so the
     // "RGB EFFECT STYLE" rows are clicked by position (relative to the fixed-size window) and

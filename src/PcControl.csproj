@@ -2,8 +2,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <RootNamespace>RgbSwitch</RootNamespace>
-    <AssemblyName>RgbSwitch</AssemblyName>
+    <RootNamespace>PcControl</RootNamespace>
+    <AssemblyName>PcControl</AssemblyName>
     <LangVersion>latest</LangVersion>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>

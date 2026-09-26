@@ -4,20 +4,20 @@ using System.IO;
 using System.Security.Principal;
 using System.Text;
 
-namespace RgbSwitch.Core
+namespace PcControl.Core
 {
-    // The vendor apps run elevated, so RgbSwitch must too. Like KANALI, it registers
+    // The vendor apps run elevated, so PcControl must too. Like KANALI, it registers
     // "run with highest privileges" scheduled tasks once (one UAC prompt) and afterwards
     // an ordinary launch just starts the task.
     public static class Installer
     {
-        public const string GuiTask = "RgbSwitch";
-        public const string ToggleTask = "RgbSwitch Toggle";
+        public const string GuiTask = "PcControl";
+        public const string ToggleTask = "PcControl Toggle";
 
         public static readonly string InstallDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "RgbSwitch");
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "PcControl");
 
-        public static string InstalledExe => Path.Combine(InstallDir, "RgbSwitch.exe");
+        public static string InstalledExe => Path.Combine(InstallDir, "PcControl.exe");
 
         public static bool IsElevated
         {
@@ -47,9 +47,24 @@ namespace RgbSwitch.Core
             if (!string.Equals(Path.GetFullPath(self), Path.GetFullPath(InstalledExe), StringComparison.OrdinalIgnoreCase))
                 File.Copy(self, InstalledExe, overwrite: true);
 
+            RemoveLegacyInstall();
             RegisterTask(GuiTask, "");
             RegisterTask(ToggleTask, "--toggle");
-            CreateShortcut("RGB Switch", InstalledExe, "", "Işıkları tek tıkla aç/kapat");
+            CreateShortcut("PC Control", InstalledExe, "", "Işıkları tek tıkla aç/kapat");
+        }
+
+        // The app was first installed as "RGB Switch".
+        static void RemoveLegacyInstall()
+        {
+            foreach (var p in Process.GetProcessesByName("RgbSwitch"))
+                try { p.Kill(); p.WaitForExit(3000); } catch (Exception) { }
+            Schtasks("/delete /f /tn \"RgbSwitch\"");
+            Schtasks("/delete /f /tn \"RgbSwitch Toggle\"");
+            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            var link = Path.Combine(desktop, "RGB Switch.lnk");
+            if (File.Exists(link)) File.Delete(link);
+            var oldDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "RgbSwitch");
+            try { if (Directory.Exists(oldDir)) Directory.Delete(oldDir, recursive: true); } catch (IOException) { }
         }
 
         static void RegisterTask(string name, string arguments)
@@ -57,7 +72,7 @@ namespace RgbSwitch.Core
             var user = WindowsIdentity.GetCurrent().User.Value;
             var xml = $@"<?xml version=""1.0"" encoding=""UTF-16""?>
 <Task version=""1.3"" xmlns=""http://schemas.microsoft.com/windows/2004/02/mit/task"">
-  <RegistrationInfo><Description>RGB Switch (yönetici olarak)</Description></RegistrationInfo>
+  <RegistrationInfo><Description>PC Control (yönetici olarak)</Description></RegistrationInfo>
   <Principals>
     <Principal id=""Author"">
       <UserId>{user}</UserId>
@@ -80,7 +95,7 @@ namespace RgbSwitch.Core
     </Exec>
   </Actions>
 </Task>";
-            var file = Path.Combine(Path.GetTempPath(), $"rgbswitch-{Guid.NewGuid():N}.xml");
+            var file = Path.Combine(Path.GetTempPath(), $"pccontrol-{Guid.NewGuid():N}.xml");
             File.WriteAllText(file, xml, Encoding.Unicode);
             try
             {

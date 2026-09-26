@@ -7,7 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Windows.Automation;
 
-namespace RgbSwitch.Core
+namespace PcControl.Core
 {
     // Window lookup, UI Automation search and real mouse clicks, for vendor apps whose
     // buttons only react to physical input.

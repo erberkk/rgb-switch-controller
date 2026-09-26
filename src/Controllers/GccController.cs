@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 using System.Windows.Automation;
 using System.Xml.Linq;
 using Microsoft.Win32;
-using RgbSwitch.Core;
+using PcControl.Core;
 
-namespace RgbSwitch.Controllers
+namespace PcControl.Controllers
 {
     // Drives GIGABYTE Control Center's own "RGB Fusion" page (motherboard + RAM in sync mode)
     // by clicking its pattern buttons, then checks the result in GCC's usdata2.xml.

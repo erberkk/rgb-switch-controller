@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace RgbSwitch.Core
+namespace PcControl.Core
 {
     public sealed class SavedState
     {
@@ -14,13 +14,19 @@ namespace RgbSwitch.Core
     public static class StateStore
     {
         public static readonly string Folder =
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RgbSwitch");
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PcControl");
 
         static readonly string FilePath = Path.Combine(Folder, "state.json");
 
         public static SavedState Load()
         {
             var state = new SavedState();
+            var legacy = Path.Combine(Path.GetDirectoryName(Folder), "RgbSwitch", "state.json");
+            if (!File.Exists(FilePath) && File.Exists(legacy))
+            {
+                Directory.CreateDirectory(Folder);
+                File.Copy(legacy, FilePath);
+            }
             if (!File.Exists(FilePath)) return state;
             var root = Json.ReadObject(File.ReadAllText(FilePath));
             state.LightsOff = root.Bool("lightsOff") ?? false;

@@ -8,9 +8,9 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using RgbSwitch.Core;
+using PcControl.Core;
 
-namespace RgbSwitch.Controllers
+namespace PcControl.Controllers
 {
     // Drives Lian Li L-Connect 3 through the same local service calls its own UI makes
     // (POST http://127.0.0.1:11021/?action=Device&type=...). The request bodies are the

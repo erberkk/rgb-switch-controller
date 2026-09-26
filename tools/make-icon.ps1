@@ -7,8 +7,9 @@ $images = foreach ($s in $sizes) {
     $g.SmoothingMode = 'AntiAlias'
     $pad = [Math]::Max(1, $s * 0.03)
     $rect = New-Object System.Drawing.RectangleF $pad, $pad, ($s - 2 * $pad), ($s - 2 * $pad)
-    $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush $rect, ([System.Drawing.Color]::FromArgb(0x8B, 0x5C, 0xF6)), ([System.Drawing.Color]::FromArgb(0x22, 0xD3, 0xEE)), 45.0
-    $g.FillEllipse($brush, $rect)
+    $g.FillEllipse([System.Drawing.Brushes]::Black, $rect)
+    $ring = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(0x3A, 0x3A, 0x3A)), ([float][Math]::Max(1, $s * 0.03))
+    $g.DrawEllipse($ring, $rect)
     $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::White), ([float]($s * 0.09))
     $pen.StartCap = 'Round'; $pen.EndCap = 'Round'
     $r = $s * 0.24

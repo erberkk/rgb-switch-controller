@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace RgbSwitch.Core
+namespace PcControl.Core
 {
     public enum DeviceState { Unknown, Ready, NeedsSetup, NotRunning, Error }
 

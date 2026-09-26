@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace RgbSwitch.Core
+namespace PcControl.Core
 {
     public sealed class DeviceOutcome
     {
@@ -16,7 +16,7 @@ namespace RgbSwitch.Core
     public sealed class LightingService
     {
         // Named so the tray app and a `--toggle` shortcut never drive the vendor apps at the same time.
-        static readonly Semaphore CrossProcessGate = new Semaphore(1, 1, @"Local\RgbSwitch.Operation");
+        static readonly Semaphore CrossProcessGate = new Semaphore(1, 1, @"Local\PcControl.Operation");
 
         SavedState state = StateStore.Load();
 
