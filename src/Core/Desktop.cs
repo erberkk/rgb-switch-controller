@@ -127,7 +127,7 @@ namespace RgbSwitch.Core
             }
         }
 
-        public const ushort VkReturn = 0x0D;
+        public const ushort VkReturn = 0x0D, VkEnd = 0x23, VkBack = 0x08;
 
         static INPUT MouseInput(uint flags) => new INPUT { type = 0, mi = new MOUSEINPUT { dwFlags = flags } };
 

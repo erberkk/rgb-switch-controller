@@ -71,7 +71,9 @@ namespace RgbSwitch.Controllers
                 Desktop.BringToFront(new IntPtr(window.Current.NativeWindowHandle));
                 var (x, y) = ToScreen(window, HexBoxX, HexBoxY);
                 Desktop.ClickAt(x, y);
-                Desktop.SelectAll();
+                Thread.Sleep(100);
+                Desktop.PressKey(Desktop.VkEnd);
+                for (var i = 0; i < 10; i++) Desktop.PressKey(Desktop.VkBack);
                 Desktop.Type(color.Hex);
                 Desktop.PressKey(Desktop.VkReturn);
                 Thread.Sleep(300);

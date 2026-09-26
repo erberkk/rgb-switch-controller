@@ -96,9 +96,13 @@ namespace RgbSwitch.Controllers
                         ?? throw new InvalidOperationException("GCC renk kutuları bulunamadı");
                     ((ValuePattern)box.GetCurrentPattern(ValuePattern.Pattern)).SetValue(value.ToString());
                 }
+                // UIA focus doesn't route keystrokes to the box; a real click does.
                 var blue = window.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, "txbx_cB"));
                 Desktop.BringToFront(hwnd);
-                blue.SetFocus();
+                Thread.Sleep(150);
+                Desktop.Click(blue);
+                Thread.Sleep(100);
+                Desktop.PressKey(Desktop.VkEnd);
                 Desktop.PressKey(Desktop.VkReturn);
 
                 var expected = "00" + color.Hex;
