@@ -1,5 +1,8 @@
 # RGB Switch
 
+
+<img width="308" height="649" alt="image" src="https://github.com/user-attachments/assets/ff866f9a-51ce-4940-9782-aefd45b18be8" />
+
 One button that turns every RGB light and screen in a PC off, and a second press that brings each of them back exactly as it was.
 
 RGB Switch doesn't talk to the hardware itself. It drives each vendor's own app through the same path that app's UI uses. Before switching off it saves the current state, and it restores that state when switching back on. The UI is in Turkish.
